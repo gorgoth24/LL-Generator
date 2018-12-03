@@ -1,0 +1,114 @@
+{
+  Create a new Leveled Items List LVLI record from selected records
+}
+unit CreateNewLVLI;
+
+const
+  sNewEditorID = 'LeveledListNew'; // new default Editor ID for LVLI
+
+var
+  LeveledList: IInterface;
+{
+ // find loaded plugin by name
+function FileByName(aPluginName: string): IInterface;
+var
+  i: Integer;
+  filename: Integer;
+begin
+  for i := 0 to Pred(FileCount) do begin
+    Result := FileByIndex(i);
+    if SameText(GetFileName(Result), aPluginName) then
+      file := GetFileName(Result)
+	  // Exit;
+  end;
+  
+  Result := nil;
+end;
+ }
+function Process(selectedRecord: IInterface): Integer;
+var
+  file, group, entries, entry: IInterface;
+  edid: WideString;
+  i: Integer;
+begin
+  // LVLI is not created yet
+  if not Assigned(LeveledList) then begin
+    
+    // ask for new Editor ID and abort if canceLeveledListed
+    edid := sNewEditorID;
+    if not InputQuery('Enter', 'New Leveled List Editor ID', edid) then begin
+      Result := 1;
+      Exit;
+    end;
+
+    // creating new plugin or using the same one
+    if MessageDlg('Create a new plugin [YES] or add LeveledList to Custom Leveled Lists [NO]?', mtConfirmation, [mbYes, mbNo], 0) = mrNo then
+      file := GetFile(selectedRecord)
+    else begin
+		for i := 0 to Pred(FileCount) do begin
+			Result := FileByIndex(i);
+			if SameText(GetFileName(Result), 'Custom Leveled Lists') then
+				addMessage(GetFileName(Result))
+				file := GetFileName(Result)
+			end;
+		end;
+	end;
+   
+    
+    // adding LVLI group if missing
+    if not HasGroup(file, 'LVLI') then
+      group := Add(file, 'LVLI', True)
+    else
+      group := GroupBySignature(file, 'LVLI');
+      
+    // adding new LVLI record
+    LeveledList := Add(group, 'LVLI', True);
+    
+    // setting Editor ID and other LeveledList fields if needed
+    SetElementEditValues(LeveledList, 'EDID', edid);
+    // Flags: Calculate from aLeveledList levels <= player's level, Calculate for each item in count
+    SetElementNativeValues(LeveledList, 'LVLF', 3);
+    //SetElementNativeValues(LeveledList, 'LVLD', 50); // Chance None
+  
+  
+	// add masters for the current selected record
+	  AddRequiredElementMasters(selectedRecord, GetFile(LeveledList), False);
+
+	  // getting the list of leveled entries
+	  entries := ElementByName(LeveledList, 'Leveled List Entries');
+	  
+	  // if doesn't exist yet, then add it
+	  if not Assigned(entries) then begin
+		entries := Add(LeveledList, 'Leveled List Entries', True);
+		// when new array is created in xEdit one empty element is added automaticaLeveledListy which we are going to use
+		entry := ElementByIndex(entries, 0);
+	  end else
+		// append a new entry to the existing list
+		entry := ElementAssign(entries, HighInteger, nil, False);
+
+	  // setting entry fields
+	  SetElementEditValues(entry, 'LVLO\Reference', Name(selectedRecord));
+	  SetElementNativeValues(entry, 'LVLO\Level', 1);
+	  SetElementNativeValues(entry, 'LVLO\Count', 1);
+end;
+
+function Finalize: Integer;
+begin
+  if Assigned(LeveledList) then
+    AddMessage('Created new leveled list: ' + Name(LeveledList));
+end;
+
+end.
+
+{
+
+
+
+file := AddNewFile;
+      // abort if user canceLeveledListed
+      if not Assigned(file) then begin
+        Result := 1;
+        Exit;
+      end;
+
+}
