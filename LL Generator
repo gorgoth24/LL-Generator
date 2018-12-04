@@ -1,114 +1,259 @@
 {
   Create a new Leveled Items List LVLI record from selected records
 }
-unit CreateNewLVLI;
-
-const
-  sNewEditorID = 'LeveledListNew'; // new default Editor ID for LVLI
+unit LLGenerator;
 
 var
-  LeveledList: IInterface;
-{
- // find loaded plugin by name
+  ArmorSetLeveledList, Gauntlets50LeveledList, Helmet50LeveledList, Set50LeveledList: IInterface;
+  
+// find loaded plugin by name
 function FileByName(aPluginName: string): IInterface;
 var
   i: Integer;
-  filename: Integer;
 begin
   for i := 0 to Pred(FileCount) do begin
     Result := FileByIndex(i);
     if SameText(GetFileName(Result), aPluginName) then
-      file := GetFileName(Result)
-	  // Exit;
+      Exit;
   end;
-  
   Result := nil;
 end;
- }
+
+// Find the type of Armor
+function ArmorKeyword(selectedRecord: IInterface): String;
+var
+  x: Integer;
+  armorkeywords: IwbElement;
+begin  
+  armorkeywords := ElementByPath(selectedRecord, 'KWDA');
+  for x := 0 to ElementCount(armorkeywords) do begin
+	if SameText(GetElementEditValues(LinksTo(ElementByIndex(armorkeywords, x+1)), 'EDID'), 'ArmorGauntlets') then begin
+	  Exit;
+	  Result := 'ArmorGauntlets'
+	end;
+	
+	if SameText(GetElementEditValues(LinksTo(ElementByIndex(armorkeywords, x+1)), 'EDID'), 'ArmorHelmet') then begin
+	  Exit;
+	  Result := 'ArmorHelmet'
+	end;
+	
+	if SameText(GetElementEditValues(LinksTo(ElementByIndex(armorkeywords, x+1)), 'EDID'), 'ArmorBoots') then begin
+	  Exit;
+	  Result := 'ArmorBoots'
+	end;
+	
+	if SameText(GetElementEditValues(LinksTo(ElementByIndex(armorkeywords, x+1)), 'EDID'), 'ArmorCuirass') then begin
+	  Exit;
+	  Result := 'ArmorCuirass'
+	end;
+  end;
+  Result := 'Unknown'
+  addMessage('Unsupported Armor Type')
+end;
+		
+
 function Process(selectedRecord: IInterface): Integer;
 var
-  file, group, entries, entry: IInterface;
-  edid: WideString;
+  file, group, entries, entry, ArmorSetEntries, ArmorSetEntry, Gauntlets50Entries, Gauntlets50Entry, Helmet50Entry, Helmet50Entries, Set50Entries, Set50Entry: IInterface;
+  modname, armorname: WideString;
   i: Integer;
 begin
-  // LVLI is not created yet
-  if not Assigned(LeveledList) then begin
-    
-    // ask for new Editor ID and abort if canceLeveledListed
-    edid := sNewEditorID;
-    if not InputQuery('Enter', 'New Leveled List Editor ID', edid) then begin
-      Result := 1;
-      Exit;
-    end;
-
-    // creating new plugin or using the same one
-    if MessageDlg('Create a new plugin [YES] or add LeveledList to Custom Leveled Lists [NO]?', mtConfirmation, [mbYes, mbNo], 0) = mrNo then
-      file := GetFile(selectedRecord)
-    else begin
-		for i := 0 to Pred(FileCount) do begin
-			Result := FileByIndex(i);
-			if SameText(GetFileName(Result), 'Custom Leveled Lists') then
-				addMessage(GetFileName(Result))
-				file := GetFileName(Result)
+	
+	// LVLI is not created yet
+	if not Assigned(ArmorSetLeveledList) or Assigned(Gauntlets50LeveledList) or Assigned(Helmet50LeveledList) or Assigned(Set50LeveledList) then begin
+	
+		// ask for Mod Name and abort if cancelArmorSetLeveledListed
+		modname := 'Armor';
+		if not InputQuery('Enter', 'Enter Mod Name', modname) then begin
+		  Result := 1;
+		  Exit;
+		end;
+		
+		// ask for Armor Name and abort if cancelArmorSetLeveledListed
+		armorname := 'Armor';
+		if not InputQuery('Enter', 'Enter Armor Name', armorname) then begin
+		  Result := 1;
+		  Exit;
+		end;
+		
+		// creating new plugin or using the same one
+		if MessageDlg('Add to Custom Leveled Lists [YES] or add to the current plugin [NO]?', mtConfirmation, [mbYes, mbNo], 0) = mrNo then
+		  file := GetFile(selectedRecord)
+		else begin
+		  file := FileByName('Custom Leveled Lists.esp')
+		end;
+		
+		// adding LVLI group if missing
+		if not HasGroup(file, 'LVLI') then begin
+		  group := Add(file, 'LVLI', True)
+		else
+		  group := GroupBySignature(file, 'LVLI')
+		end;
+		
+		// ArmorSet LVLI is not created yet
+		if not Assigned(ArmorSetLeveledList) then begin
+			ArmorSetLeveledList := Add(group, 'LVLI', True); // adding new LVLI record	
+			addMessage('ArmorSetLeveledList Created');
+			SetElementEditValues(ArmorSetLeveledList, 'EDID', 'LLArmor_ArmorSet_' + modname + '_' + armorname); // setting Editor ID and other LeveledList fields if needed
+			SetElementNativeValues(ArmorSetLeveledList, 'LVLF', 4); // Flags: Use All
+			//SetElementNativeValues(ArmorSetLeveledList, 'LVLD', 50); // Chance None			
+			AddRequiredElementMasters(selectedRecord, GetFile(ArmorSetLeveledList), False); // add masters for the current selected record			
+			ArmorSetEntries := ElementByName(ArmorSetLeveledList, 'Leveled List Entries'); // getting the list of leveled entries
+			
+			// if ArmorSetEntries are not assigned yet, assign them
+			if not Assigned(ArmorSetEntries) then begin
+			  ArmorSetEntries := Add(ArmorSetLeveledList, 'Leveled List Entries', True); // if ArmorSetEntry doesn't exist yet, then add it
+			  ArmorSetEntry := ElementByIndex(ArmorSetEntries, 0); // when new array is created in xEdit one empty element is added automatically which we are going to use
+			end else begin
+			  ArmorSetEntry := ElementAssign(ArmorSetEntries, HighInteger, nil, False); // append a new ArmorSetEntry to the existing list
 			end;
+			
+			// Setting ArmorSetEntry fields
+			SetElementEditValues(ArmorSetEntry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(ArmorSetEntry, 'LVLO\Level', 1);
+			SetElementNativeValues(ArmorSetEntry, 'LVLO\Count', 1);
+		end;	
+		
+		// 50Set LVLI is not created yet
+		if not Assigned(Set50LeveledList) then begin
+			Set50LeveledList := Add(group, 'LVLI', True); // adding new LVLI record
+			SetElementEditValues(Set50LeveledList, 'EDID', 'LLArmor_50Set_' + modname + '_' + armorname); // setting Editor ID and other Gauntlets50 fields if needed
+			SetElementNativeValues(Set50LeveledList, 'LVLF', 4); // Flags: Use All
+			//SetElementNativeValues(Set50LeveledList, 'LVLD', 50); // Chance None
+			AddRequiredElementMasters(selectedRecord, GetFile(Set50LeveledList), False); // add masters for the current selected record
+			Set50Entries := ElementByName(Set50LeveledList, 'Leveled List Entries'); // getting the list of leveled entries
+			
+			// if Set50Entries are not assigned yet, assign them
+			if not Assigned(Set50Entries) then begin
+			  if (ArmorKeyword(selectedRecord) = 'ArmorCuirass') or (ArmorKeyword(selectedRecord) = 'ArmorBoots') then begin
+				Set50Entries := Add(Set50LeveledList, 'Leveled List Entries', True); // if Set50Entry doesn't exist yet, then add it
+				Set50Entry := ElementByIndex(Set50Entries, 0); // when new array is created in xEdit one empty element is added automatically which we are going to use
+			  end;
+			end else begin
+			  Set50Entry := ElementAssign(Set50Entries, HighInteger, nil, False);  // append a new Set50Entry to the existing list
+			end;
+			
+			// Setting Set50Entry fields
+			SetElementEditValues(Set50Entry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(Set50Entry, 'LVLO\Level', 1);
+			SetElementNativeValues(Set50Entry, 'LVLO\Count', 1);		
+		end;
+		
+		// Gauntlets50 LVLI is not created yet
+		if not Assigned(Gauntlets50LeveledList) then begin
+			Gauntlets50LeveledList := Add(group, 'LVLI', True); // adding new LVLI record
+			SetElementEditValues(Gauntlets50LeveledList, 'EDID', 'LLArmor_Gauntlets50_' + modname + '_' + armorname); // setting Editor ID and other Gauntlets50 fields if needed
+			SetElementNativeValues(Gauntlets50LeveledList, 'LVLF', 3); // Flags: Calculate from all levels <= player's level, Calculate for each item in count
+			SetElementNativeValues(Gauntlets50LeveledList, 'LVLD', 50); // Chance None
+			AddRequiredElementMasters(selectedRecord, GetFile(Gauntlets50LeveledList), False); // add masters for the current selected record
+			Gauntlets50Entries := ElementByName(Gauntlets50LeveledList, 'Leveled List Entries'); // getting the list of leveled entries
+			
+			// Add Gauntlets50 to 50Set
+			if Assigned(Set50LeveledList) then begin
+				Set50Entry := ElementAssign(Set50Entries, HighInteger, nil, False);  // append a new Set50Entry to the existing list
+				SetElementEditValues(Set50Entry, 'LVLO\Reference', 'LLArmor_Gauntlets50_' + modname + '_' + armorname);
+				SetElementNativeValues(Set50Entry, 'LVLO\Level', 1);
+				SetElementNativeValues(Set50Entry, 'LVLO\Count', 1);
+			end else begin
+			addMessage('Gauntlets50 did not add to 50Set Correctly');
+			end;
+
+			// if Gauntlets50Entries are not assigned yet, assign them
+			if not Assigned(Gauntlets50Entries) then begin
+			  if ArmorKeyword(selectedRecord) = 'ArmorGauntlets' then begin
+				Gauntlets50Entries := Add(Gauntlets50LeveledList, 'Leveled List Entries', True); // if Gauntlets50Entry doesn't exist yet, then add it
+				Gauntlets50Entry := ElementByIndex(Gauntlets50Entries, 0); // when new array is created in xEdit one empty element is added automatically which we are going to use
+			  end;
+			end else begin
+			  Gauntlets50Entry := ElementAssign(Gauntlets50Entries, HighInteger, nil, False);  // append a new Gauntlets50Entry to the existing list
+			end;
+			
+			// Setting Gauntlets50Entry fields
+			SetElementEditValues(Gauntlets50Entry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(Gauntlets50Entry, 'LVLO\Level', 1);
+			SetElementNativeValues(Gauntlets50Entry, 'LVLO\Count', 1);
+		end;
+		
+		// Helmet50 LVLI is not created yet
+		if not Assigned(Helmet50LeveledList) then begin
+			Helmet50LeveledList := Add(group, 'LVLI', True); // adding new LVLI record
+			SetElementEditValues(Helmet50LeveledList, 'EDID', 'LLArmor_Helmet50_' + modname + '_' + armorname); // setting Editor ID and other Gauntlets50 fields if needed
+			SetElementNativeValues(Helmet50LeveledList, 'LVLF', 3); // Flags: Calculate from all levels <= player's level, Calculate for each item in count
+			SetElementNativeValues(Helmet50LeveledList, 'LVLD', 50); // Chance None
+			AddRequiredElementMasters(selectedRecord, GetFile(Helmet50LeveledList), False); // add masters for the current selected record
+			Helmet50Entries := ElementByName(Helmet50LeveledList, 'Leveled List Entries'); // getting the list of leveled entries
+			
+			// Add Helmet50 to 50Set
+			if Assigned(Set50LeveledList) then begin
+				Set50Entry := ElementAssign(Set50Entries, HighInteger, nil, False);  // append a new Set50Entry to the existing list
+				SetElementEditValues(Set50Entry, 'LVLO\Reference', 'LLArmor_Helmet50_' + modname + '_' + armorname);
+				SetElementNativeValues(Set50Entry, 'LVLO\Level', 1);
+				SetElementNativeValues(Set50Entry, 'LVLO\Count', 1);
+			end else begin
+			  addMessage('Helmet50 did not add to 50Set Correctly');
+			end;
+			
+			// if Helmet50Entries are not assigned yet, assign them
+			if not Assigned(Helmet50Entries) then begin
+			  if ArmorKeyword(selectedRecord) = 'ArmorHelmet' then begin
+				Helmet50Entries := Add(Helmet50LeveledList, 'Leveled List Entries', True); // if Helmet50Entry doesn't exist yet, then add it
+				Helmet50Entry := ElementByIndex(Helmet50Entries, 0); // when new array is created in xEdit one empty element is added automatically which we are going to use
+			  end;
+			end else begin
+			  Helmet50Entry := ElementAssign(Helmet50Entries, HighInteger, nil, False);  // append a new Helmet50Entry to the existing list
+			end;
+			// Setting Helmet50Entry fields
+			SetElementEditValues(Helmet50Entry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(Helmet50Entry, 'LVLO\Level', 1);
+			SetElementNativeValues(Helmet50Entry, 'LVLO\Count', 1);
+		end;
+	
+	end else
+		
+		if ArmorKeyword(selectedRecord) = 'ArmorGauntlets' then begin 
+			// Getting Leveled List Entries
+			Gauntlets50Entries := ElementByName(Gauntlets50LeveledList, 'Leveled List Entries'); // getting the list of leveled entries
+			// Adding to Gauntlets50
+			Gauntlets50Entry := ElementAssign(Gauntlets50Entries, HighInteger, nil, False);  // append a new Gauntlets50Entry to the existing list
+			SetElementEditValues(Gauntlets50Entry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(Gauntlets50Entry, 'LVLO\Level', 1);
+			SetElementNativeValues(Gauntlets50Entry, 'LVLO\Count', 1);
+			// Adding to Armor Set
+			ArmorSetEntry := ElementAssign(ArmorSetEntries, HighInteger, nil, False); // append a new ArmorSetEntry to the existing list
+			SetElementEditValues(ArmorSetEntry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(ArmorSetEntry, 'LVLO\Level', 1);
+			SetElementNativeValues(ArmorSetEntry, 'LVLO\Count', 1);
+		end;
+		
+		if ArmorKeyword(selectedRecord) = 'ArmorHelmet' then begin 
+			// Getting Leveled List Entries
+			Helmet50Entries := ElementByName(Helmet50LeveledList, 'Leveled List Entries'); // getting the list of leveled entries
+			// Adding to Gauntlets50
+			Helmet50Entry := ElementAssign(Helmet50Entries, HighInteger, nil, False);  // append a new Gauntlets50Entry to the existing list
+			SetElementEditValues(Gauntlets50Entry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(Gauntlets50Entry, 'LVLO\Level', 1);
+			SetElementNativeValues(Gauntlets50Entry, 'LVLO\Count', 1);
+			// Adding to Armor Set
+			ArmorSetEntry := ElementAssign(ArmorSetEntries, HighInteger, nil, False); // append a new ArmorSetEntry to the existing list
+			SetElementEditValues(ArmorSetEntry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(ArmorSetEntry, 'LVLO\Level', 1);
+			SetElementNativeValues(ArmorSetEntry, 'LVLO\Count', 1);
+		end;
+		
+		if (ArmorKeyword(selectedRecord) = 'ArmorBoots') or (ArmorKeyword(selectedRecord) = 'ArmorCuirass') then begin 
+			// Adding to Armor Set
+			ArmorSetEntry := ElementAssign(ArmorSetEntries, HighInteger, nil, False); // append a new ArmorSetEntry to the existing list
+			SetElementEditValues(ArmorSetEntry, 'LVLO\Reference', Name(selectedRecord));
+			SetElementNativeValues(ArmorSetEntry, 'LVLO\Level', 1);
+			SetElementNativeValues(ArmorSetEntry, 'LVLO\Count', 1);
 		end;
 	end;
-   
-    
-    // adding LVLI group if missing
-    if not HasGroup(file, 'LVLI') then
-      group := Add(file, 'LVLI', True)
-    else
-      group := GroupBySignature(file, 'LVLI');
-      
-    // adding new LVLI record
-    LeveledList := Add(group, 'LVLI', True);
-    
-    // setting Editor ID and other LeveledList fields if needed
-    SetElementEditValues(LeveledList, 'EDID', edid);
-    // Flags: Calculate from aLeveledList levels <= player's level, Calculate for each item in count
-    SetElementNativeValues(LeveledList, 'LVLF', 3);
-    //SetElementNativeValues(LeveledList, 'LVLD', 50); // Chance None
-  
-  
-	// add masters for the current selected record
-	  AddRequiredElementMasters(selectedRecord, GetFile(LeveledList), False);
-
-	  // getting the list of leveled entries
-	  entries := ElementByName(LeveledList, 'Leveled List Entries');
-	  
-	  // if doesn't exist yet, then add it
-	  if not Assigned(entries) then begin
-		entries := Add(LeveledList, 'Leveled List Entries', True);
-		// when new array is created in xEdit one empty element is added automaticaLeveledListy which we are going to use
-		entry := ElementByIndex(entries, 0);
-	  end else
-		// append a new entry to the existing list
-		entry := ElementAssign(entries, HighInteger, nil, False);
-
-	  // setting entry fields
-	  SetElementEditValues(entry, 'LVLO\Reference', Name(selectedRecord));
-	  SetElementNativeValues(entry, 'LVLO\Level', 1);
-	  SetElementNativeValues(entry, 'LVLO\Count', 1);
-end;
 
 function Finalize: Integer;
 begin
-  if Assigned(LeveledList) then
-    AddMessage('Created new leveled list: ' + Name(LeveledList));
+  if Assigned(ArmorSetLeveledList) then
+    AddMessage('Created new leveled list: ' + Name(ArmorSetLeveledList));
 end;
 
 end.
 
-{
-
-
-
-file := AddNewFile;
-      // abort if user canceLeveledListed
-      if not Assigned(file) then begin
-        Result := 1;
-        Exit;
-      end;
-
-}
